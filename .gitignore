@@ -1,0 +1,14 @@
+# Video recordings (may contain PII)
+*.mov
+*.mp4
+*.avi
+
+# Extracted video frames (temp, may contain PII)
+frames/
+
+# Reference-only page captured from production (read-only; never edit/commit)
+Candidates _ People.html
+Candidates _ People_files/
+
+# Call notes — may contain PII; keep out of public repo
+legacy/pre-screening-9jun2026.txt

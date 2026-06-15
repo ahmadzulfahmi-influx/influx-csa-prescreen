@@ -1,0 +1,1694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Influx — Pre-Screening</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<script src="https://kit.fontawesome.com/e972712a89.js" crossorigin="anonymous"></script>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     CONFIG — HR replaces these values before deploying
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<script>
+const CONFIG = {
+  // Display string shown in the salary acknowledgment checkbox and gate screen
+  salary_range_display: "{{salary_range}}",
+
+  // Hard-gate ceiling per currency. Candidate's expectation above this → blocked.
+  // HR MUST set these before deploying. null = no salary gating for that currency.
+  // Example: { USD: 1000 } blocks a candidate who asks $1,100/month.
+  salary_ceiling: {
+    USD: null,  // SET THIS — e.g. 1000
+    IDR: null,  // SET THIS — e.g. 10000000
+    PHP: null,  // SET THIS — e.g. 55000
+    MYR: null,  // SET THIS — e.g. 5000
+    GBP: null,  // SET THIS
+    EUR: null,  // SET THIS
+    AUD: null,  // SET THIS
+    SGD: null,  // SET THIS
+    CAD: null,  // SET THIS
+  },
+
+  // Minimum English level. "basic" = gate only if they select Basic (most permissive).
+  // Set to "conversational" to also gate Conversational.
+  english_minimum: "basic",
+
+  // Shift flag check: if NONE of the candidate's selected times overlap this list → flag.
+  required_shifts: ["regular", "morning"],
+
+  // Whether voice support is a required item for this role.
+  voice_required: true,
+
+  // Whether IC arrangement is a knockout (flag only, never hard-gates in this form).
+  ic_is_knockout: true,
+};
+</script>
+
+<style>
+/* ── RESET + TOKENS ───────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --tan:   #FF4A00;
+  --esp:   #201B13;
+  --sand:  #E9E5D6;
+  --snow:  #FFFFFF;
+  --hazel: #D3C5BF;
+  --char:  #55524E;
+  --cocoa: #4E403B;
+  --olive: #587322;
+  --bone:  #F0F7EF;
+  --red:   #8C152F;
+  --font: 'Inter', -apple-system, sans-serif;
+}
+html, body { min-height: 100%; font-family: var(--font); background: var(--sand); color: var(--esp); }
+
+/* ── LAYOUT ───────────────────────────────────────────────────────────────── */
+.page {
+  min-height: 100vh;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: flex-start;
+  padding: 40px 20px 60px;
+}
+
+.card {
+  width: 100%; max-width: 640px;
+  background: var(--snow);
+  border-radius: 12px;
+  border-top: 4px solid var(--tan);
+  box-shadow: 0 2px 20px rgba(0,0,0,0.08);
+}
+
+.card-body { padding: 36px 40px; }
+.card-footer {
+  padding: 14px 40px;
+  border-top: 1px solid var(--hazel);
+  text-align: center;
+}
+.card-footer span { font-size: 0.75rem; color: var(--char); }
+
+/* ── LOGO ─────────────────────────────────────────────────────────────────── */
+.logo { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1rem; color: var(--esp); margin-bottom: 28px; }
+.logo i { font-size: 22px; color: var(--tan); }
+
+/* ── SCREENS ──────────────────────────────────────────────────────────────── */
+.screen { display: none; }
+.screen.active { display: block; }
+
+/* ── INTRO SCREEN ─────────────────────────────────────────────────────────── */
+.intro-h1 { font-size: 1.5rem; font-weight: 700; color: var(--esp); margin-bottom: 8px; }
+.intro-sub { font-size: 0.9375rem; color: var(--char); margin-bottom: 24px; }
+.intro-section-hd { font-size: 0.875rem; font-weight: 700; color: var(--esp); margin: 20px 0 6px; }
+.intro-section-body { font-size: 0.875rem; color: var(--cocoa); line-height: 1.65; }
+.intro-section-body strong { color: var(--esp); }
+.time-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--bone); border: 1px solid var(--hazel);
+  border-radius: 20px; padding: 5px 12px;
+  font-size: 0.8125rem; font-weight: 600; color: var(--char);
+  margin: 18px 0 4px;
+}
+.ready-text { font-size: 0.9375rem; font-weight: 700; color: var(--esp); margin: 16px 0 20px; }
+
+.intro-inputs { display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px; }
+.intro-inputs label { display: block; font-size: 0.875rem; font-weight: 500; color: var(--esp); margin-bottom: 6px; }
+.intro-inputs input {
+  width: 100%; padding: 10px 12px;
+  font-family: var(--font); font-size: 0.875rem; color: var(--esp);
+  background: var(--snow);
+  border: 1px solid var(--hazel); border-radius: 8px;
+  outline: none; transition: border-color 0.2s;
+}
+.intro-inputs input:focus { border-color: var(--tan); }
+.intro-inputs input::placeholder { color: #B8ADA7; }
+.intro-error { font-size: 0.8rem; color: var(--red); margin-top: -8px; display: none; }
+.intro-error.visible { display: block; }
+
+/* ── FORM SCREEN ──────────────────────────────────────────────────────────── */
+.form-h1 { font-size: 1.375rem; font-weight: 700; color: var(--esp); margin-bottom: 6px; }
+.form-sub { font-size: 0.875rem; color: var(--char); line-height: 1.55; margin-bottom: 28px; }
+
+.form-divider { border: none; border-top: 1px solid var(--hazel); margin: 24px 0; }
+.form-section-label {
+  font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--char); margin-bottom: 16px;
+}
+
+/* ── FIELDS ───────────────────────────────────────────────────────────────── */
+.field { margin-bottom: 20px; }
+.field > label {
+  display: block; font-size: 0.875rem; font-weight: 500; color: var(--esp); margin-bottom: 8px;
+}
+.field .hint { font-size: 0.8125rem; color: var(--char); margin-top: 5px; }
+.field.has-error > label { color: var(--red); }
+
+input[type="text"],
+input[type="email"],
+input[type="number"],
+input[type="date"],
+select,
+textarea {
+  width: 100%; padding: 10px 12px;
+  font-family: var(--font); font-size: 0.875rem; color: var(--esp);
+  background: var(--snow);
+  border: 1px solid var(--hazel); border-radius: 8px;
+  outline: none; transition: border-color 0.2s;
+  -webkit-appearance: none; appearance: none;
+}
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="number"]:focus,
+input[type="date"]:focus,
+select:focus,
+textarea:focus { border-color: var(--tan); }
+input::placeholder, textarea::placeholder { color: #B8ADA7; }
+.field.has-error input,
+.field.has-error select,
+.field.has-error textarea { border-color: var(--red); }
+textarea { resize: vertical; min-height: 80px; line-height: 1.55; }
+
+select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='7' viewBox='0 0 12 7'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2355524E' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+  cursor: pointer;
+}
+
+/* Inline group: number + select */
+.inline-group { display: flex; gap: 8px; }
+.inline-group input[type="number"] { flex: 1; }
+.inline-group select { width: 130px; flex-shrink: 0; }
+
+/* ── RADIO PILLS ──────────────────────────────────────────────────────────── */
+.radio-group, .check-group { display: flex; flex-wrap: wrap; gap: 10px; }
+.radio-group.col, .check-group.col { flex-direction: column; }
+
+.radio-opt {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 14px;
+  border: 1.5px solid var(--hazel); border-radius: 8px;
+  cursor: pointer; font-size: 0.875rem; color: var(--esp);
+  transition: border-color 0.18s, background 0.18s;
+  user-select: none;
+}
+.radio-opt:hover { border-color: var(--tan); }
+.radio-opt input[type="radio"] { display: none; }
+.radio-dot {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid var(--hazel);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: border-color 0.18s;
+}
+.radio-dot::after {
+  content: ''; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--tan); opacity: 0; transition: opacity 0.18s;
+}
+.radio-opt.selected { border-color: var(--tan); background: #FFF5F2; }
+.radio-opt.selected .radio-dot { border-color: var(--tan); }
+.radio-opt.selected .radio-dot::after { opacity: 1; }
+
+/* ── CHECKBOX PILLS ───────────────────────────────────────────────────────── */
+.check-opt {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 14px;
+  border: 1.5px solid var(--hazel); border-radius: 8px;
+  cursor: pointer; font-size: 0.875rem; color: var(--esp);
+  transition: border-color 0.18s, background 0.18s;
+  user-select: none;
+}
+.check-opt:hover { border-color: var(--tan); }
+.check-opt input[type="checkbox"] { display: none; }
+.check-box {
+  width: 16px; height: 16px; border-radius: 4px;
+  border: 2px solid var(--hazel);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: all 0.18s;
+  font-size: 9px; color: white;
+}
+.check-opt.selected { border-color: var(--tan); background: #FFF5F2; }
+.check-opt.selected .check-box { border-color: var(--tan); background: var(--tan); }
+
+/* ── STANDALONE CHECKBOX (IC status) ─────────────────────────────────────── */
+.standalone-check {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--hazel); border-radius: 8px;
+  cursor: pointer; transition: border-color 0.18s, background 0.18s;
+}
+.standalone-check:hover { border-color: var(--tan); }
+.standalone-check input[type="checkbox"] { display: none; }
+.standalone-check .check-box { margin-top: 1px; }
+.standalone-check .check-label { font-size: 0.875rem; color: var(--esp); line-height: 1.5; }
+.standalone-check.selected { border-color: var(--tan); background: #FFF5F2; }
+.standalone-check.selected .check-box { border-color: var(--tan); background: var(--tan); }
+
+/* ── BUTTON ───────────────────────────────────────────────────────────────── */
+.btn-primary {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 13px 20px;
+  background: var(--tan); color: white;
+  font-family: var(--font); font-size: 0.9375rem; font-weight: 600;
+  border: none; border-radius: 8px; cursor: pointer;
+  transition: background 0.2s; margin-top: 8px;
+}
+.btn-primary:hover { background: #e03e00; }
+
+/* ── GATE SCREEN ──────────────────────────────────────────────────────────── */
+.result-screen { text-align: center; padding: 40px 0 16px; }
+.result-icon { font-size: 2.75rem; margin-bottom: 18px; }
+.result-icon.gate-icon { color: #C08060; }
+.result-icon.clear-icon { color: var(--olive); }
+.result-icon.flagged-icon { color: var(--tan); }
+.result-h1 { font-size: 1.375rem; font-weight: 700; color: var(--esp); margin-bottom: 10px; }
+.result-body { font-size: 0.9375rem; color: var(--char); line-height: 1.6; max-width: 460px; margin: 0 auto 20px; }
+
+.gate-reasons { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; text-align: left; }
+.gate-reason-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: #FFF5F2; border: 1px solid #FFD5C5;
+  border-radius: 8px; padding: 10px 14px;
+  font-size: 0.875rem; color: var(--esp); line-height: 1.5;
+}
+.gate-reason-item i { color: var(--tan); margin-top: 2px; flex-shrink: 0; }
+
+.status-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  border-radius: 20px; padding: 5px 14px;
+  font-size: 0.8125rem; font-weight: 600; margin: 4px;
+}
+.chip-clear { background: var(--bone); border: 1px solid #C0D8B0; color: var(--olive); }
+.chip-flagged { background: #FFF5F2; border: 1px solid #FFD5C5; color: var(--tan); }
+.chip-out { background: #FDF2EE; border: 1px solid #E8C0A8; color: #C08060; }
+.chip-trait { background: var(--sand); border: 1px solid var(--hazel); color: var(--char); font-weight: 500; }
+
+/* ── JSON PANEL ───────────────────────────────────────────────────────────── */
+.json-panel { margin-top: 28px; text-align: left; }
+.json-panel-hd {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--sand); border: 1px solid var(--hazel); border-radius: 8px 8px 0 0;
+  padding: 10px 14px; font-size: 0.6875rem; font-weight: 700; color: var(--char);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.copy-btn {
+  display: flex; align-items: center; gap: 5px;
+  background: none; border: 1px solid var(--hazel); border-radius: 6px;
+  padding: 4px 10px; font-size: 0.75rem; font-weight: 500; color: var(--char);
+  cursor: pointer; font-family: var(--font); transition: all 0.2s;
+}
+.copy-btn:hover { border-color: var(--tan); color: var(--tan); }
+.json-panel pre {
+  background: var(--esp); color: #E9E5D6;
+  border: 1px solid var(--hazel); border-top: none; border-radius: 0 0 8px 8px;
+  padding: 16px; font-size: 0.75rem; line-height: 1.6;
+  overflow-x: auto; white-space: pre-wrap; word-break: break-word; margin: 0;
+}
+
+/* ── RECRUITER FILTER VIEW ────────────────────────────────────────────────── */
+.card.card-wide { max-width: 960px; }
+.recruiter-header { margin-bottom: 16px; }
+.recruiter-header h1 { font-size: 1.25rem; font-weight: 700; color: var(--esp); margin-bottom: 8px; }
+.recruiter-note {
+  font-size: 0.8125rem; color: var(--esp);
+  background: var(--bone); border: 1px solid #C0D8B0;
+  border-radius: 6px; padding: 8px 12px; line-height: 1.5;
+}
+.recruiter-layout { display: flex; gap: 20px; align-items: flex-start; }
+.candidate-list { flex: 1; min-width: 0; }
+.filter-panel {
+  width: 248px; flex-shrink: 0;
+  background: var(--snow); border: 1px solid var(--hazel);
+  border-radius: 10px; padding: 14px;
+}
+.filter-count { font-size: 0.8125rem; font-weight: 600; color: var(--char); margin-bottom: 14px; }
+.filter-group { margin-bottom: 14px; }
+.filter-group-label {
+  font-size: 0.6875rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--char); margin-bottom: 6px;
+}
+.filter-checkbox-list { display: flex; flex-direction: column; gap: 4px; max-height: 140px; overflow-y: auto; }
+.filter-checkbox-item { display: flex; align-items: center; gap: 6px; font-size: 0.8125rem; color: var(--esp); cursor: pointer; }
+.filter-checkbox-item input[type=checkbox] { width: auto; flex-shrink: 0; accent-color: var(--tan); }
+.filter-range { display: flex; gap: 6px; align-items: center; }
+.filter-range input { flex: 1; padding: 6px 8px; font-size: 0.8125rem; }
+.filter-select select { padding: 7px 10px; font-size: 0.8125rem; }
+.filter-num input { width: 100%; padding: 7px 10px; font-size: 0.8125rem; }
+.clear-filters-btn {
+  width: 100%; padding: 8px; background: none;
+  border: 1px solid var(--hazel); border-radius: 8px;
+  font-family: var(--font); font-size: 0.8125rem; font-weight: 600;
+  color: var(--char); cursor: pointer; margin-top: 6px; transition: all 0.2s;
+}
+.clear-filters-btn:hover { border-color: var(--tan); color: var(--tan); }
+.candidate-card {
+  background: var(--snow); border: 1px solid var(--hazel);
+  border-radius: 10px; padding: 13px 15px; margin-bottom: 9px;
+}
+.candidate-card.just-submitted { border: 2px solid var(--tan); }
+.candidate-card-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 8px; margin-bottom: 7px;
+}
+.candidate-name { font-size: 0.9375rem; font-weight: 600; color: var(--esp); }
+.candidate-badges { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.candidate-meta {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  font-size: 0.8125rem; color: var(--char); margin-bottom: 7px;
+}
+.candidate-chips { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 3px; }
+.chip-skill {
+  background: #EEF2FF; border: 1px solid #C7D2FE; color: #4338CA;
+  font-size: 0.7rem; padding: 2px 8px; border-radius: 20px; font-weight: 500;
+}
+.chip-bool {
+  background: var(--sand); border: 1px solid var(--hazel); color: var(--char);
+  font-size: 0.7rem; padding: 2px 8px; border-radius: 20px; font-weight: 500;
+}
+.badge-submitted {
+  background: var(--tan); color: white;
+  font-size: 0.7rem; padding: 2px 9px; border-radius: 20px; font-weight: 600;
+}
+.badge-flagged {
+  background: #FFF5F2; border: 1px solid #FFD5C5; color: var(--tan);
+  font-size: 0.7rem; padding: 2px 9px; border-radius: 20px; font-weight: 600;
+}
+.badge-clear {
+  background: var(--bone); border: 1px solid #C0D8B0; color: var(--olive);
+  font-size: 0.7rem; padding: 2px 9px; border-radius: 20px; font-weight: 600;
+}
+.recruiter-json-details { margin-top: 22px; }
+.recruiter-json-details > summary {
+  cursor: pointer; font-size: 0.8125rem; font-weight: 600; color: var(--char);
+  padding: 6px 2px; user-select: none; list-style: none;
+  display: flex; align-items: center; gap: 6px;
+}
+.recruiter-json-details > summary:hover { color: var(--tan); }
+
+/* ── RESPONSIVE ───────────────────────────────────────────────────────────── */
+@media (max-width: 680px) {
+  .card.card-wide { max-width: 100%; }
+  .recruiter-layout { flex-direction: column-reverse; }
+  .filter-panel { width: 100%; }
+}
+@media (max-width: 600px) {
+  .card-body { padding: 28px 20px; }
+  .card-footer { padding: 12px 20px; }
+  .check-group, .radio-group { flex-direction: column; }
+  .inline-group { flex-direction: column; }
+  .inline-group select { width: 100%; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+<div class="card">
+
+<!-- ════════════════════════════════
+     SCREEN 1 — INTRO / LANDING
+     ════════════════════════════════ -->
+<div class="card-body screen active" id="screen-intro">
+  <div class="logo"><i class="fa-duotone fa-life-ring"></i> Influx</div>
+
+  <h1 class="intro-h1">Welcome to your pre-screening</h1>
+  <p class="intro-sub">Thank you for your interest in joining our team!</p>
+
+  <p class="intro-section-body" style="margin-bottom:16px">
+    We want to make sure this role is the right fit for you. Before we proceed, please
+    take a few minutes to answer some quick questions. This helps our recruiters understand
+    your situation and set up the next stage accordingly.
+  </p>
+
+  <p class="intro-section-hd">How to answer</p>
+  <p class="intro-section-body">
+    Please answer using your <strong>own voice and your own words</strong>.<br>
+    There are no right or wrong answers — we're looking for fit, not perfection.
+    Honest answers save everyone's time (including yours).
+  </p>
+
+  <div class="time-badge">
+    <i class="fa-regular fa-clock"></i> Provided time: 10 minutes
+  </div>
+  <p class="ready-text">Ready? Let's get started.</p>
+
+  <div class="intro-inputs">
+    <div>
+      <label for="intro-name">Your name</label>
+      <input type="text" id="intro-name" placeholder="e.g. Arnold" autocomplete="name">
+    </div>
+    <div>
+      <label for="intro-email">Email address</label>
+      <input type="email" id="intro-email" placeholder="e.g. arnold@example.com" autocomplete="email">
+    </div>
+    <p class="intro-error" id="intro-error">Please fill in both your name and email address.</p>
+  </div>
+
+  <button class="btn-primary" onclick="startPrescreen()">
+    Start pre-screening <i class="fa-solid fa-arrow-right"></i>
+  </button>
+</div>
+
+<!-- ════════════════════════════════
+     SCREEN 2 — PRE-SCREEN FORM
+     ════════════════════════════════ -->
+<div class="card-body screen" id="screen-form">
+  <div class="logo"><i class="fa-duotone fa-life-ring"></i> Influx</div>
+
+  <h1 class="form-h1">A few questions before we begin</h1>
+  <p class="form-sub" id="form-greeting">
+    Before the next stage, please answer a few quick questions so our recruiters can get to
+    know your situation. Some questions have minimum requirements for this role.
+  </p>
+
+  <form id="prescreen-form" novalidate>
+
+    <!-- ── SECTION 1: AVAILABILITY ── -->
+    <p class="form-section-label">Availability</p>
+
+    <!-- Field 1: Full-time commitment -->
+    <div class="field" id="f-fulltime">
+      <label>Can you commit to full-time work? <span style="color:var(--char);font-weight:400">(44 hours/week, 8 hours/day)</span> <span style="color:var(--tan)">*</span></label>
+      <div class="radio-group">
+        <label class="radio-opt">
+          <input type="radio" name="fulltime" value="yes">
+          <span class="radio-dot"></span> Yes
+        </label>
+        <label class="radio-opt">
+          <input type="radio" name="fulltime" value="no">
+          <span class="radio-dot"></span> No
+        </label>
+      </div>
+      <p class="hint" style="display:none;color:var(--red)" id="hint-fulltime">Please select an option.</p>
+    </div>
+
+    <!-- Field 2: Working days -->
+    <div class="field">
+      <label>Which days do you prefer working? <span style="color:var(--char);font-weight:400">(select all that apply)</span></label>
+      <div class="check-group" id="cg-days">
+        <label class="check-opt">
+          <input type="checkbox" name="days" value="weekdays">
+          <span class="check-box"><i class="fa-solid fa-check"></i></span> Weekdays (Mon–Fri)
+        </label>
+        <label class="check-opt">
+          <input type="checkbox" name="days" value="weekends">
+          <span class="check-box"><i class="fa-solid fa-check"></i></span> Weekends
+        </label>
+        <label class="check-opt">
+          <input type="checkbox" name="days" value="public_holidays">
+          <span class="check-box"><i class="fa-solid fa-check"></i></span> Public holidays
+        </label>
+      </div>
+    </div>
+
+    <!-- Field 3: Working times -->
+    <div class="field">
+      <label>Which times do you prefer working? <span style="color:var(--char);font-weight:400">(select all that apply)</span></label>
+      <div class="check-group" id="cg-times">
+        <label class="check-opt">
+          <input type="checkbox" name="times" value="regular">
+          <span class="check-box"><i class="fa-solid fa-check"></i></span> Regular — 9 AM to 6 PM
+        </label>
+        <label class="check-opt">
+          <input type="checkbox" name="times" value="morning">
+          <span class="check-box"><i class="fa-solid fa-check"></i></span> Morning — 6 AM to 3 PM
+        </label>
+        <label class="check-opt">
+          <input type="checkbox" name="times" value="afternoon">
+          <span class="check-box"><i class="fa-solid fa-check"></i></span> Afternoon — 12 PM to 9 PM
+        </label>
+        <label class="check-opt">
+          <input type="checkbox" name="times" value="night">
+          <span class="check-box"><i class="fa-solid fa-check"></i></span> Night — 8 PM to 5 AM
+        </label>
+      </div>
+    </div>
+
+    <!-- Field 4: Earliest start date -->
+    <div class="field" id="f-startdate">
+      <label>What is the earliest date you can start? <span style="color:var(--tan)">*</span></label>
+      <input type="date" id="inp-startdate" oninput="clearError('f-startdate')">
+      <p class="hint" style="display:none;color:var(--red)" id="hint-startdate">Please select your earliest available start date.</p>
+    </div>
+
+    <hr class="form-divider">
+
+    <!-- ── SECTION 2: COMMUNICATION ── -->
+    <p class="form-section-label">Communication</p>
+
+    <!-- Field 5: Voice support -->
+    <div class="field">
+      <label>Are you comfortable providing voice (phone) support?</label>
+      <div class="radio-group">
+        <label class="radio-opt">
+          <input type="radio" name="voice" value="yes">
+          <span class="radio-dot"></span> Yes
+        </label>
+        <label class="radio-opt">
+          <input type="radio" name="voice" value="no">
+          <span class="radio-dot"></span> No
+        </label>
+      </div>
+    </div>
+
+    <!-- Field 6: English proficiency -->
+    <div class="field" id="f-english">
+      <label>How would you rate your English communication skills? <span style="color:var(--tan)">*</span></label>
+      <select id="sel-english" onchange="clearError('f-english')">
+        <option value="">— Select —</option>
+        <option value="basic">Basic — I can understand simple messages</option>
+        <option value="conversational">Conversational — I can hold everyday conversations</option>
+        <option value="fluent">Fluent — I'm comfortable in most professional situations</option>
+        <option value="native">Native / Near-native</option>
+      </select>
+      <p class="hint" style="display:none;color:var(--red)" id="hint-english">Please select your English level.</p>
+    </div>
+
+    <hr class="form-divider">
+
+    <!-- ── SECTION 3: BACKGROUND ── -->
+    <p class="form-section-label">Background</p>
+
+    <!-- Field 7: Employment status -->
+    <div class="field">
+      <label>What is your current employment status?</label>
+      <select id="sel-employment">
+        <option value="">— Select —</option>
+        <option value="employed">Employed (full-time)</option>
+        <option value="employed_part">Employed (part-time)</option>
+        <option value="unemployed">Currently not working</option>
+        <option value="student">Student</option>
+        <option value="freelancer">Freelancer / Independent</option>
+      </select>
+    </div>
+
+    <!-- Field 8: Notice period (shown only when employed) -->
+    <div class="field" id="f-notice" style="display:none">
+      <label>What is your notice period? <span style="color:var(--char);font-weight:400">(optional)</span></label>
+      <select id="sel-notice">
+        <option value="">— Select —</option>
+        <option value="immediate">Immediate</option>
+        <option value="lt2weeks">&lt;2 weeks</option>
+        <option value="2to4weeks">2–4 weeks</option>
+        <option value="1month">1 month</option>
+        <option value="gt1month">&gt;1 month</option>
+      </select>
+    </div>
+
+    <!-- Field 9: Education level -->
+    <div class="field" id="f-education">
+      <label>Highest level of education completed <span style="color:var(--tan)">*</span></label>
+      <select id="sel-education" onchange="clearError('f-education')">
+        <option value="">— Select —</option>
+        <option value="high_school">High school</option>
+        <option value="diploma">Diploma / Associate's</option>
+        <option value="bachelors">Bachelor's degree</option>
+        <option value="masters">Master's degree</option>
+        <option value="doctorate">Doctorate</option>
+        <option value="other">Other</option>
+      </select>
+      <p class="hint" style="display:none;color:var(--red)" id="hint-education">Please select your education level.</p>
+    </div>
+
+    <!-- Field 10: Field of study -->
+    <div class="field">
+      <label>Field of study <span style="color:var(--char);font-weight:400">(optional)</span></label>
+      <input type="text" id="inp-field" placeholder="e.g. Business Administration, Psychology">
+    </div>
+
+    <!-- Field 11: Years of relevant experience -->
+    <div class="field" id="f-experience">
+      <label>Years of relevant work experience <span style="color:var(--tan)">*</span></label>
+      <input type="number" id="inp-experience" placeholder="e.g. 2" min="0" oninput="clearError('f-experience')">
+      <p class="hint" style="display:none;color:var(--red)" id="hint-experience">Please enter your years of relevant experience (0 or more).</p>
+    </div>
+
+    <!-- Field 12: Relevant skills (optional multi-select) -->
+    <div class="field">
+      <label>Relevant skills <span style="color:var(--char);font-weight:400">(select all that apply — optional)</span></label>
+      <div class="check-group" style="gap:8px">
+        <label class="check-opt">
+          <input type="checkbox" name="skills" value="email-support">
+          <span class="check-box"><i class="fa-solid fa-check"></i></span> Email support
+        </label>
+        <label class="check-opt">
+          <input type="checkbox" name="skills" value="live-chat">
+          <span class="check-box"><i class="fa-solid fa-check"></i></span> Live chat
+        </label>
+        <label class="check-opt">
+          <input type="checkbox" name="skills" value="phone-voice">
+          <span class="check-box"><i class="fa-solid fa-check"></i></span> Phone / voice
+        </label>
+        <label class="check-opt">
+          <input type="checkbox" name="skills" value="crm-tools">
+          <span class="check-box"><i class="fa-solid fa-check"></i></span> CRM tools
+        </label>
+        <label class="check-opt">
+          <input type="checkbox" name="skills" value="ticketing">
+          <span class="check-box"><i class="fa-solid fa-check"></i></span> Ticketing systems
+        </label>
+        <label class="check-opt">
+          <input type="checkbox" name="skills" value="troubleshooting">
+          <span class="check-box"><i class="fa-solid fa-check"></i></span> Troubleshooting
+        </label>
+        <label class="check-opt">
+          <input type="checkbox" name="skills" value="technical-support">
+          <span class="check-box"><i class="fa-solid fa-check"></i></span> Technical support
+        </label>
+        <label class="check-opt">
+          <input type="checkbox" name="skills" value="multilingual">
+          <span class="check-box"><i class="fa-solid fa-check"></i></span> Multilingual
+        </label>
+        <label class="check-opt">
+          <input type="checkbox" name="skills" value="data-entry">
+          <span class="check-box"><i class="fa-solid fa-check"></i></span> Data entry
+        </label>
+        <label class="check-opt">
+          <input type="checkbox" name="skills" value="social-media">
+          <span class="check-box"><i class="fa-solid fa-check"></i></span> Social media support
+        </label>
+        <label class="check-opt">
+          <input type="checkbox" name="skills" value="sales-upsell">
+          <span class="check-box"><i class="fa-solid fa-check"></i></span> Sales / upsell
+        </label>
+        <label class="check-opt">
+          <input type="checkbox" name="skills" value="complaint-handling">
+          <span class="check-box"><i class="fa-solid fa-check"></i></span> Complaint handling
+        </label>
+      </div>
+      <div style="margin-top:10px">
+        <input type="text" id="inp-skills-other" placeholder="Other skills (optional)…">
+      </div>
+    </div>
+
+    <!-- Field 13: Prior Influx application -->
+    <div class="field" id="f-prior">
+      <label>Have you applied to Influx before? <span style="color:var(--tan)">*</span></label>
+      <div class="radio-group">
+        <label class="radio-opt">
+          <input type="radio" name="prior" value="yes">
+          <span class="radio-dot"></span> Yes
+        </label>
+        <label class="radio-opt">
+          <input type="radio" name="prior" value="no">
+          <span class="radio-dot"></span> No
+        </label>
+      </div>
+      <p class="hint" style="display:none;color:var(--red)" id="hint-prior">Please select an option.</p>
+    </div>
+
+    <!-- Field 14: Why this role (optional) -->
+    <div class="field">
+      <label>What draws you to a Customer Support role? <span style="color:var(--char);font-weight:400">(optional)</span></label>
+      <textarea id="ta-intent" placeholder="e.g. I enjoy helping people solve problems and building long-term relationships with clients…" rows="3"></textarea>
+    </div>
+
+    <!-- Field 15: Competing processes -->
+    <div class="field">
+      <label>Are you currently in any other active recruitment processes?</label>
+      <div class="radio-group">
+        <label class="radio-opt">
+          <input type="radio" name="competing" value="yes">
+          <span class="radio-dot"></span> Yes
+        </label>
+        <label class="radio-opt">
+          <input type="radio" name="competing" value="no">
+          <span class="radio-dot"></span> No
+        </label>
+      </div>
+    </div>
+
+    <hr class="form-divider">
+
+    <!-- ── SECTION 4: ROLE TERMS ── -->
+    <p class="form-section-label">Role terms</p>
+
+    <!-- Field 16: Salary expectation -->
+    <div class="field" id="f-salary">
+      <label>Salary expectation (per month) <span style="color:var(--tan)">*</span></label>
+      <div class="inline-group">
+        <input type="number" id="inp-salary" placeholder="e.g. 800" min="0" oninput="clearError('f-salary')">
+        <select id="sel-currency">
+          <option value="USD">USD</option>
+          <option value="IDR">IDR</option>
+          <option value="PHP">PHP</option>
+          <option value="MYR">MYR</option>
+          <option value="GBP">GBP</option>
+          <option value="EUR">EUR</option>
+          <option value="AUD">AUD</option>
+          <option value="SGD">SGD</option>
+          <option value="CAD">CAD</option>
+        </select>
+      </div>
+      <p class="hint" style="display:none;color:var(--red)" id="hint-salary">Please enter your salary expectation.</p>
+    </div>
+
+    <!-- Field 17: IC acknowledgment -->
+    <div class="field">
+      <label>Independent contractor arrangement</label>
+      <label class="standalone-check" id="sc-ic">
+        <input type="checkbox" id="chk-ic">
+        <span class="check-box"><i class="fa-solid fa-check"></i></span>
+        <span class="check-label">
+          I understand that this role is structured as an <strong>independent contractor</strong> position —
+          there is no employer-provided health insurance or tax withholding.
+        </span>
+      </label>
+    </div>
+
+    <hr class="form-divider">
+
+    <!-- ── SECTION 5: LOCATION & SETUP ── -->
+    <p class="form-section-label">Location &amp; Setup</p>
+
+    <!-- Field 18: Country -->
+    <div class="field">
+      <label>Which country are you located in?</label>
+      <select id="sel-country">
+        <option value="">Select a country</option>
+        <option>Albania</option><option>Angola</option><option>Argentina</option>
+        <option>Australia</option><option>Austria</option><option>Barbados</option>
+        <option>Belgium</option><option>Bermuda</option><option>Bolivia</option>
+        <option>Brazil</option><option>Canada</option><option>Chile</option>
+        <option>Colombia</option><option>Dominican Republic</option><option>Egypt</option>
+        <option>Fiji</option><option>France</option><option>Germany</option>
+        <option>Ghana</option><option>Guatemala</option><option>Guyana</option>
+        <option>India</option><option>Indonesia</option><option>Ireland</option>
+        <option>Italy</option><option>Jamaica</option><option>Japan</option>
+        <option>Kenya</option><option>Madagascar</option><option>Malaysia</option>
+        <option>Mexico</option><option>Morocco</option><option>Namibia</option>
+        <option>Netherlands</option><option>New Zealand</option><option>Nigeria</option>
+        <option>Pakistan</option><option>Papua New Guinea</option><option>Peru</option>
+        <option>Philippines</option><option>Poland</option><option>Portugal</option>
+        <option>Romania</option><option>Singapore</option><option>South Africa</option>
+        <option>Spain</option><option>Sri Lanka</option><option>Thailand</option>
+        <option>Trinidad and Tobago</option><option>Turkey</option><option>Uganda</option>
+        <option>Ukraine</option><option>United Kingdom</option><option>United States</option>
+        <option>Vietnam</option><option>Zimbabwe</option>
+      </select>
+    </div>
+
+    <!-- Field 19: City -->
+    <div class="field">
+      <label>Which city are you located in?</label>
+      <input type="text" id="inp-city" placeholder="e.g. Jakarta">
+    </div>
+
+    <!-- Field 20: Computer specs -->
+    <div class="field">
+      <label>What are your computer's specifications?</label>
+      <textarea id="ta-specs" placeholder="e.g. MacBook Air M1, 8GB RAM, 256GB SSD" rows="2"></textarea>
+    </div>
+
+    <!-- Field 21: Internet speed -->
+    <div class="field">
+      <label>What is your internet speed? <span style="color:var(--char);font-weight:400">(Mbps)</span></label>
+      <input type="number" id="inp-internet" placeholder="e.g. 50" min="0">
+    </div>
+
+    <button type="button" class="btn-primary" onclick="submitForm()" id="submit-btn">
+      Submit <i class="fa-solid fa-arrow-right"></i>
+    </button>
+
+  </form>
+</div><!-- /screen-form -->
+
+<!-- ════════════════════════════════
+     SCREEN 3A — GATE (knocked out)
+     ════════════════════════════════ -->
+<div class="card-body screen" id="screen-gate">
+  <div class="logo"><i class="fa-duotone fa-life-ring"></i> Influx</div>
+  <div class="result-screen">
+    <div class="result-icon gate-icon"><i class="fa-regular fa-circle-xmark"></i></div>
+    <h1 class="result-h1">Thank you for your time</h1>
+    <p class="result-body">
+      Based on your answers, this role may not be the right fit for your situation right now.
+      We truly appreciate your interest and encourage you to keep an eye out for future
+      opportunities at Influx.
+    </p>
+    <div class="gate-reasons" id="gate-reason-list"></div>
+    <span class="status-chip chip-out"><i class="fa-solid fa-circle-xmark"></i> Not proceeding</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     SCREEN 3B — COMPLETE
+     ════════════════════════════════ -->
+<div class="card-body screen" id="screen-complete">
+  <div class="logo"><i class="fa-duotone fa-life-ring"></i> Influx</div>
+  <div class="recruiter-header">
+    <h1>Candidate Pool — CSA Pre-Screen</h1>
+    <div class="recruiter-note" id="recruiter-status-note"></div>
+  </div>
+  <div class="recruiter-layout">
+    <div class="candidate-list" id="candidate-list-el"></div>
+    <div class="filter-panel" id="filter-panel-el"></div>
+  </div>
+  <details class="recruiter-json-details">
+    <summary><i class="fa-regular fa-code"></i> Show raw PrescreenResponses JSON (engineering contract)</summary>
+    <div class="json-panel" style="margin-top:10px">
+      <div class="json-panel-hd">
+        <span>PrescreenResponses JSON</span>
+        <button class="copy-btn" onclick="copyJson()">
+          <i class="fa-regular fa-copy"></i> Copy
+        </button>
+      </div>
+      <pre id="json-output"></pre>
+    </div>
+  </details>
+</div>
+
+<div class="card-footer">
+  <span>Powered by Influx</span>
+</div>
+</div><!-- /card -->
+</div><!-- /page -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════
+let candidateName  = "";
+let candidateEmail = "";
+let _jsonResult    = null;
+
+// ═══════════════════════════════════════════════════════════════════
+// SCREEN TRANSITIONS
+// ═══════════════════════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PILL + CONDITIONAL WIRING (replaces pickRadio / toggleCheck / toggleStandalone)
+// Run once on DOMContentLoaded — uses delegated change listeners to avoid the
+// double-fire caused by onclick on a label that wraps its input.
+// ═══════════════════════════════════════════════════════════════════
+function wirePills() {
+  // Checkboxes (incl. standalone IC): reflect input.checked → .selected
+  document.querySelectorAll('.check-opt input[type=checkbox], .standalone-check input[type=checkbox]')
+    .forEach(inp => inp.addEventListener('change', () =>
+      inp.closest('.check-opt, .standalone-check').classList.toggle('selected', inp.checked)));
+
+  // Radios: mark the checked label, clear siblings, clear field error
+  document.querySelectorAll('.radio-opt input[type=radio]')
+    .forEach(inp => inp.addEventListener('change', () => {
+      document.querySelectorAll(`input[name="${inp.name}"]`)
+        .forEach(r => r.closest('.radio-opt').classList.toggle('selected', r.checked));
+      const field = inp.closest('.field');
+      if (field) {
+        field.classList.remove('has-error');
+        const h = field.querySelector("[id^='hint-']");
+        if (h) h.style.display = 'none';
+      }
+    }));
+
+  // Notice period: show/hide based on employment status
+  const empSel    = document.getElementById('sel-employment');
+  const noticeWrap = document.getElementById('f-notice');
+  if (empSel && noticeWrap) {
+    empSel.addEventListener('change', () => {
+      const employed = ['employed', 'employed_part'].includes(empSel.value);
+      noticeWrap.style.display = employed ? '' : 'none';
+      if (!employed) document.getElementById('sel-notice').value = '';
+    });
+  }
+}
+
+document.addEventListener('DOMContentLoaded', wirePills);
+
+// ═══════════════════════════════════════════════════════════════════
+// FIELD ERROR HELPERS
+// ═══════════════════════════════════════════════════════════════════
+function clearError(fieldId) {
+  const f = document.getElementById(fieldId);
+  if (!f) return;
+  f.classList.remove("has-error");
+  const hint = f.querySelector("[id^='hint-']");
+  if (hint) hint.style.display = "none";
+}
+
+function setError(fieldId, msg) {
+  const f = document.getElementById(fieldId);
+  if (!f) return;
+  f.classList.add("has-error");
+  const hint = f.querySelector("[id^='hint-']");
+  if (hint) { hint.textContent = msg; hint.style.display = "block"; }
+  return f;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// INTRO → FORM
+// ═══════════════════════════════════════════════════════════════════
+function startPrescreen() {
+  const nameEl  = document.getElementById("intro-name");
+  const emailEl = document.getElementById("intro-email");
+  const errEl   = document.getElementById("intro-error");
+
+  const name  = nameEl.value.trim();
+  const email = emailEl.value.trim();
+
+  if (!name || !email || !/\S+@\S+\.\S+/.test(email)) {
+    errEl.textContent = !name
+      ? "Please enter your name."
+      : !email
+        ? "Please enter your email address."
+        : "Please enter a valid email address.";
+    errEl.classList.add("visible");
+    (!name ? nameEl : emailEl).focus();
+    return;
+  }
+
+  errEl.classList.remove("visible");
+  candidateName  = name;
+  candidateEmail = email;
+
+  document.getElementById("form-greeting").textContent =
+    `Thanks, ${name}! Please answer a few quick questions to help our team understand your situation. ` +
+    `Some questions have minimum requirements for this role.`;
+
+  showScreen("screen-form");
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// COLLECT VALUES
+// ═══════════════════════════════════════════════════════════════════
+function getRadio(name) {
+  const el = document.querySelector(`input[name="${name}"]:checked`);
+  return el ? el.value : null;
+}
+
+function getChecks(name) {
+  return Array.from(document.querySelectorAll(`input[name="${name}"]:checked`)).map(e => e.value);
+}
+
+// Map days + times → shift_preference.ranking (legacy field)
+function deriveShiftRanking(days, times) {
+  const out = [];
+  if (times.includes("regular"))   out.push("regular");
+  if (times.includes("morning"))   out.push("morning");
+  if (times.includes("afternoon")) out.push("afternoon");
+  if (times.includes("night"))     out.push("graveyard");
+  if (days.includes("weekends") || days.includes("public_holidays")) out.push("weekend");
+  return out.length ? out : null;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GATE LOGIC
+// ═══════════════════════════════════════════════════════════════════
+const GATE_MESSAGES = {
+  availability_not_full_time:
+    "This role requires a full-time commitment of 44 hours per week. " +
+    "Based on your answer, we're unable to proceed at this stage.",
+  salary_expectation_above_range:
+    "Your stated salary expectation is above the range for this role. " +
+    "We want to be transparent to save your time.",
+  english_below_bar:
+    "This role requires at least conversational English proficiency for daily client communication. " +
+    "Based on your self-assessment, this role may not be the right fit right now.",
+};
+
+const FLAG_MESSAGES = {
+  voice_support_declined:   "Voice support declined — role includes phone support",
+  ic_status_declined:       "IC arrangement not acknowledged",
+  has_competing_processes:  "Candidate has active recruitment processes elsewhere",
+  shift_preference_mismatch:"No overlap with required shift options",
+  // device_specs_unclear: evaluated server-side against device_adequacy_criteria — not flagged client-side
+};
+
+function evaluateGates(data) {
+  const hardGates = [];
+  const flags     = [];
+
+  // ── HARD GATES ──────────────────────────────────────────────────
+  if (data.availability.full_time === false) {
+    hardGates.push("availability_not_full_time");
+  }
+
+  const ENGLISH_LEVELS = ["basic", "conversational", "fluent", "native"];
+  const enMinIdx  = ENGLISH_LEVELS.indexOf(CONFIG.english_minimum);
+  const enCandIdx = ENGLISH_LEVELS.indexOf(data.english_self_rating.level);
+  if (enCandIdx !== -1 && enMinIdx !== -1 && enCandIdx < enMinIdx) {
+    hardGates.push("english_below_bar");
+  }
+
+  const salaryAmt = data.salary_expectation.amount;
+  const salaryCur = data.salary_expectation.currency;
+  if (salaryAmt !== null && salaryCur) {
+    const ceiling = CONFIG.salary_ceiling[salaryCur];
+    if (ceiling && salaryAmt > ceiling) {
+      hardGates.push("salary_expectation_above_range");
+    }
+  }
+
+  // ── FLAG-AND-CONTINUE ────────────────────────────────────────────
+  if (CONFIG.voice_required && data.voice_support.comfortable === false) {
+    flags.push("voice_support_declined");
+  }
+  if (CONFIG.ic_is_knockout && data.ic_status.accepts === false) {
+    flags.push("ic_status_declined");
+  }
+  if (data.competing_processes.value === "yes") {
+    flags.push("has_competing_processes");
+  }
+
+  const ranking = data.shift_preference.ranking || [];
+  const topTwo  = ranking.slice(0, 2);
+  const overlap = topTwo.filter(s => CONFIG.required_shifts.includes(s));
+  if (topTwo.length > 0 && overlap.length === 0) {
+    flags.push("shift_preference_mismatch");
+  }
+
+  // device_specs adequacy is evaluated server-side against device_adequacy_criteria template config
+  // — not flagged client-side to avoid false positives on free-text descriptions.
+
+  return { hardGates, flags };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// BUILD PrescreenResponses JSON
+// ═══════════════════════════════════════════════════════════════════
+function buildPrescreenResponses(days, times, ranking) {
+  const fulltimeVal    = getRadio("fulltime");
+  const voiceVal       = getRadio("voice");
+  const competingVal   = getRadio("competing");
+  const priorVal       = getRadio("prior");
+  const icChecked      = document.getElementById("chk-ic").checked;
+  const englishLevel   = document.getElementById("sel-english").value || null;
+  const empStatus      = document.getElementById("sel-employment").value || null;
+  const noticeVal      = document.getElementById("sel-notice").value || null;
+  const intent         = document.getElementById("ta-intent").value.trim() || null;
+  const salaryAmt      = parseFloat(document.getElementById("inp-salary").value) || null;
+  const salaryCur      = document.getElementById("sel-currency").value;
+  const country        = document.getElementById("sel-country").value || null;
+  const city           = document.getElementById("inp-city").value.trim() || null;
+  const specs          = document.getElementById("ta-specs").value.trim() || null;
+  const internet       = document.getElementById("inp-internet").value.trim() || null;
+  const startDate      = document.getElementById("inp-startdate").value || null;
+  const education      = document.getElementById("sel-education").value || null;
+  const fieldOfStudy   = document.getElementById("inp-field").value.trim() || null;
+  const expRaw         = document.getElementById("inp-experience").value;
+  const expYears       = expRaw !== "" ? parseFloat(expRaw) : null;
+  const selectedSkills = getChecks("skills");
+  const skillsOther    = document.getElementById("inp-skills-other").value.trim() || null;
+
+  const salaryRange    = CONFIG.salary_range_display;
+  const isPlaceholder  = salaryRange === "{{salary_range}}";
+
+  return {
+    // ── Existing fields ──────────────────────────────────────────────
+    device_specs: {
+      value: specs,
+      internet_speed: internet ? `${internet} Mbps` : null,
+      adequacy: null,  // server evaluates against device_adequacy_criteria
+      evidence: specs || null,
+    },
+    competing_processes: {
+      value: competingVal,
+      evidence: competingVal === "yes" ? "Candidate confirmed active processes elsewhere." : null,
+    },
+    shift_preference: {
+      ranking,
+      evidence: ranking ? `Selected days: ${days.join(", ")}; times: ${times.join(", ")}` : null,
+    },
+    voice_support: {
+      comfortable: voiceVal === null ? null : voiceVal === "yes",
+      evidence: voiceVal ? `Candidate selected: ${voiceVal}` : null,
+    },
+    ic_status: {
+      accepts: icChecked,
+      evidence: icChecked ? "IC arrangement acknowledged." : "IC arrangement NOT acknowledged.",
+    },
+    salary: {
+      acknowledged: isPlaceholder ? null : true,
+      evidence: isPlaceholder ? null : `Salary range ${salaryRange} was shown.`,
+    },
+
+    // ── New / extended fields ─────────────────────────────────────────
+    availability: {
+      full_time:  fulltimeVal === null ? null : fulltimeVal === "yes",
+      start_date: startDate,
+      evidence:   fulltimeVal ? `Candidate selected: ${fulltimeVal}` : null,
+    },
+    salary_expectation: {
+      amount:   salaryAmt,
+      currency: salaryCur || null,
+      evidence: salaryAmt ? `${salaryAmt} ${salaryCur}/month` : null,
+    },
+    english_self_rating: {
+      level:    englishLevel,
+      evidence: englishLevel ? `Self-rated: ${englishLevel}` : null,
+    },
+    employment_status: {
+      status:        empStatus,
+      notice_period: noticeVal,  // populated when employed / employed_part
+      evidence:      empStatus
+        ? `Status: ${empStatus}${noticeVal ? "; notice: " + noticeVal : ""}`
+        : null,
+    },
+    education: {
+      level:          education,
+      field_of_study: fieldOfStudy,
+      evidence:       education
+        ? `${education}${fieldOfStudy ? " — " + fieldOfStudy : ""}`
+        : null,
+    },
+    experience: {
+      years:    expYears,
+      evidence: expYears !== null ? `${expYears} year(s) of relevant experience` : null,
+    },
+    skills: {
+      selected: selectedSkills,
+      other:    skillsOther,
+      evidence: selectedSkills.length ? selectedSkills.join(", ") : null,
+    },
+    prior_application: {
+      applied_before: priorVal === null ? null : priorVal === "yes",
+      evidence:       priorVal ? `Candidate selected: ${priorVal}` : null,
+    },
+    job_search_intent: {
+      why_csa:  intent,
+      evidence: intent ? intent.substring(0, 120) + (intent.length > 120 ? "…" : "") : null,
+    },
+
+    // ── Form metadata ─────────────────────────────────────────────────
+    form_meta: {
+      candidate_name:  candidateName,
+      candidate_email: candidateEmail,
+      working_days:    days,
+      working_times:   times,
+      country,
+      city,
+      submitted_at: new Date().toISOString(),
+    },
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DERIVE TRAITS
+// Emits affirmative-only kebab-case trait tags for recruiter filtering.
+// Scalar fields (start date, salary, internet, experience years, notice period)
+// go into the `filterable` block (not into traits) so recruiters can filter
+// by range/value rather than exact match.
+// ═══════════════════════════════════════════════════════════════════
+function deriveTraits(data) {
+  // Boolean operational flags ONLY.
+  // Categorical/scalar attributes (english, status, education, experience bands,
+  // skills, country) live in filterable{} for recruiter range/value filtering —
+  // matching how the People app separates dedicated filters from the generic Trait
+  // multi-select (q[country_id_in] vs q[user_trait_positions_right_id_in]).
+  const traits = [];
+
+  // Availability
+  if (data.availability.full_time === true)          traits.push("full-time-available");
+  const days  = data.form_meta.working_days  || [];
+  const times = data.form_meta.working_times || [];
+  if (days.includes("weekends"))                     traits.push("available-weekends");
+  if (days.includes("public_holidays"))              traits.push("available-public-holidays");
+  const shiftMap = { regular: "shift-regular", morning: "shift-morning", afternoon: "shift-afternoon", night: "shift-night" };
+  times.forEach(t => { if (shiftMap[t]) traits.push(shiftMap[t]); });
+
+  // Communication & role terms
+  if (data.voice_support.comfortable === true)       traits.push("voice-capable");
+  if (data.competing_processes.value === "yes")      traits.push("has-competing-processes");
+  if (data.ic_status.accepts === true)               traits.push("ic-accepted");
+
+  // Prior application
+  if (data.prior_application && data.prior_application.applied_before === true) {
+    traits.push("returning-applicant");
+  }
+
+  return [...new Set(traits)]; // dedupe
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// BUILD FILTERABLE BLOCK
+// Scalar fields recruiters filter by range/value (not trait tags).
+// Intentional denormalization — values also live in their respective
+// field objects; duplicated here for index/search performance.
+// ═══════════════════════════════════════════════════════════════════
+function buildFilterable(data) {
+  // Structured recruiter-filter contract.
+  // These are categorical/scalar fields suitable for range/value queries —
+  // matching dedicated filters in the People app (q[country_id_in] etc.).
+  // prescreen_traits[] holds boolean operational flags; this block holds everything else.
+  const internetStr = data.device_specs.internet_speed;
+  return {
+    country:            data.form_meta.country || null,
+    city:               data.form_meta.city || null,
+    education_level:    data.education ? data.education.level || null : null,
+    field_of_study:     data.education ? data.education.field_of_study || null : null,
+    experience_years:   data.experience ? data.experience.years : null,
+    skills:             data.skills ? data.skills.selected : [],
+    english_level:      data.english_self_rating ? data.english_self_rating.level || null : null,
+    employment_status:  data.employment_status ? data.employment_status.status || null : null,
+    notice_period:      data.employment_status ? data.employment_status.notice_period || null : null,
+    available_from:     data.availability.start_date || null,
+    salary_expectation: data.salary_expectation.amount !== null
+      ? { amount: data.salary_expectation.amount, currency: data.salary_expectation.currency }
+      : null,
+    internet_mbps:      internetStr ? Number(internetStr.replace(/[^0-9.]/g, '')) || null : null,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SUBMIT
+// ═══════════════════════════════════════════════════════════════════
+function submitForm() {
+  let valid = true;
+
+  // Validate required: full-time
+  if (!getRadio("fulltime")) {
+    setError("f-fulltime", "Please select an option."); valid = false;
+  }
+
+  // Validate required: English
+  if (!document.getElementById("sel-english").value) {
+    setError("f-english", "Please select your English level."); valid = false;
+  }
+
+  // Validate required: earliest start date
+  if (!document.getElementById("inp-startdate").value) {
+    setError("f-startdate", "Please select your earliest available start date."); valid = false;
+  }
+
+  // Validate required: education level
+  if (!document.getElementById("sel-education").value) {
+    setError("f-education", "Please select your education level."); valid = false;
+  }
+
+  // Validate required: years of experience
+  const expVal = document.getElementById("inp-experience").value;
+  if (expVal === "" || isNaN(parseFloat(expVal)) || parseFloat(expVal) < 0) {
+    setError("f-experience", "Please enter your years of relevant experience (0 or more)."); valid = false;
+  }
+
+  // Validate required: prior Influx application
+  if (!getRadio("prior")) {
+    setError("f-prior", "Please select an option."); valid = false;
+  }
+
+  // Validate required: salary
+  const salaryVal = document.getElementById("inp-salary").value.trim();
+  if (!salaryVal || isNaN(parseFloat(salaryVal)) || parseFloat(salaryVal) <= 0) {
+    setError("f-salary", "Please enter your salary expectation."); valid = false;
+  }
+
+  if (!valid) {
+    // Scroll to first error
+    const firstErr = document.querySelector(".has-error");
+    if (firstErr) firstErr.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+
+  const days    = getChecks("days");
+  const times   = getChecks("times");
+  const ranking = deriveShiftRanking(days, times);
+
+  const prescreenData = buildPrescreenResponses(days, times, ranking);
+  const { hardGates, flags } = evaluateGates(prescreenData);
+
+  // Append trait + filterable blocks (computed on all submissions for server consumption)
+  prescreenData.prescreen_traits = deriveTraits(prescreenData);
+  prescreenData.filterable       = buildFilterable(prescreenData);
+
+  _jsonResult = prescreenData;
+
+  if (hardGates.length > 0) {
+    // Hard gate — show gate screen
+    prescreenData._prescreen_status          = "knocked_out";
+    prescreenData._prescreen_flagged_reasons = [...hardGates, ...flags];
+
+    const list = document.getElementById("gate-reason-list");
+    list.innerHTML = hardGates.map(key =>
+      `<div class="gate-reason-item">
+        <i class="fa-solid fa-circle-info"></i>
+        <span>${GATE_MESSAGES[key] || key}</span>
+      </div>`
+    ).join("");
+
+    showScreen("screen-gate");
+  } else {
+    // Flag-and-continue or clear — render recruiter filter view
+    const isFlagged = flags.length > 0;
+    prescreenData._prescreen_status          = isFlagged ? "completed_flagged" : "completed_clear";
+    prescreenData._prescreen_flagged_reasons = flags;
+
+    document.getElementById("json-output").textContent =
+      JSON.stringify(prescreenData, null, 2);
+
+    showScreen("screen-complete");
+    renderRecruiterView(prescreenData);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RECRUITER FILTER VIEW
+// Synthetic seed candidates (no PII; obviously fake names/emails).
+// The just-submitted candidate is routed through buildFilterable() so
+// all three consumers of filterable keys (buildFilterable output,
+// SAMPLE_CANDIDATES literals, filterCandidates access) share the same
+// key names — schema drift silently no-ops filters.
+// ═══════════════════════════════════════════════════════════════════
+const SAMPLE_CANDIDATES = [
+  {
+    name: "Andi Pratama",
+    filterable: {
+      country: "Indonesia", city: "Bandung",
+      education_level: "bachelors", field_of_study: "Communication",
+      experience_years: 2, skills: ["email-support", "live-chat", "crm-tools"],
+      english_level: "conversational", employment_status: "employed",
+      notice_period: "2-4_weeks", available_from: "2026-07-01",
+      salary_expectation: { amount: 6000000, currency: "IDR" }, internet_mbps: 20,
+    },
+    prescreen_traits: ["full-time-available", "available-weekends", "shift-regular", "shift-morning", "voice-capable", "ic-accepted"],
+    _status: "completed_clear",
+  },
+  {
+    name: "Maria Santos",
+    filterable: {
+      country: "Philippines", city: "Manila",
+      education_level: "bachelors", field_of_study: "Business Administration",
+      experience_years: 4, skills: ["phone-voice", "complaint-handling", "ticketing", "live-chat"],
+      english_level: "fluent", employment_status: "employed",
+      notice_period: "1_month", available_from: "2026-08-01",
+      salary_expectation: { amount: 45000, currency: "PHP" }, internet_mbps: 50,
+    },
+    prescreen_traits: ["full-time-available", "shift-morning", "shift-afternoon", "voice-capable", "ic-accepted"],
+    _status: "completed_clear",
+  },
+  {
+    name: "Reza Firmansyah",
+    filterable: {
+      country: "Indonesia", city: "Jakarta",
+      education_level: "diploma", field_of_study: "Information Technology",
+      experience_years: 1, skills: ["technical-support", "troubleshooting", "data-entry"],
+      english_level: "basic", employment_status: "fresh_graduate",
+      notice_period: null, available_from: "2026-06-15",
+      salary_expectation: { amount: 5000000, currency: "IDR" }, internet_mbps: 15,
+    },
+    prescreen_traits: ["full-time-available", "shift-regular", "shift-morning", "shift-afternoon", "shift-night", "ic-accepted"],
+    _status: "completed_flagged",
+  },
+  {
+    name: "Jasmine Tan",
+    filterable: {
+      country: "Malaysia", city: "Kuala Lumpur",
+      education_level: "bachelors", field_of_study: "Psychology",
+      experience_years: 3, skills: ["email-support", "social-media", "crm-tools", "multilingual"],
+      english_level: "fluent", employment_status: "employed_part",
+      notice_period: "2-4_weeks", available_from: "2026-07-15",
+      salary_expectation: { amount: 3500, currency: "MYR" }, internet_mbps: 100,
+    },
+    prescreen_traits: ["full-time-available", "available-weekends", "shift-morning", "shift-afternoon", "voice-capable", "returning-applicant", "ic-accepted"],
+    _status: "completed_clear",
+  },
+  {
+    name: "Carlos Rivera",
+    filterable: {
+      country: "Philippines", city: "Cebu",
+      education_level: "high_school", field_of_study: null,
+      experience_years: 6, skills: ["phone-voice", "sales-upsell", "complaint-handling"],
+      english_level: "native", employment_status: "freelance",
+      notice_period: null, available_from: "2026-06-20",
+      salary_expectation: { amount: 55000, currency: "PHP" }, internet_mbps: 30,
+    },
+    prescreen_traits: ["full-time-available", "available-weekends", "shift-morning", "shift-afternoon", "shift-night", "voice-capable", "has-competing-processes", "ic-accepted"],
+    _status: "completed_flagged",
+  },
+  {
+    name: "Dewi Anggraini",
+    filterable: {
+      country: "Indonesia", city: "Surabaya",
+      education_level: "masters", field_of_study: "Human Resources",
+      experience_years: 5, skills: ["email-support", "live-chat", "data-entry", "complaint-handling"],
+      english_level: "fluent", employment_status: "employed",
+      notice_period: "1_month", available_from: "2026-08-15",
+      salary_expectation: { amount: 9000000, currency: "IDR" }, internet_mbps: 25,
+    },
+    prescreen_traits: ["full-time-available", "shift-regular", "shift-morning", "voice-capable", "returning-applicant", "ic-accepted"],
+    _status: "completed_clear",
+  },
+  {
+    name: "Samuel Okafor",
+    filterable: {
+      country: "Nigeria", city: "Lagos",
+      education_level: "bachelors", field_of_study: "Mass Communication",
+      experience_years: 2, skills: ["email-support", "social-media", "ticketing"],
+      english_level: "native", employment_status: "unemployed",
+      notice_period: null, available_from: "2026-06-25",
+      salary_expectation: { amount: 800, currency: "USD" }, internet_mbps: 10,
+    },
+    prescreen_traits: ["full-time-available", "available-weekends", "available-public-holidays", "shift-regular", "shift-morning", "shift-afternoon", "shift-night", "ic-accepted"],
+    _status: "completed_clear",
+  },
+];
+
+// English ordering for "at least X" filter
+const ENGLISH_ORDER = { basic: 1, conversational: 2, fluent: 3, native: 4 };
+
+// ── Pure filter function (unit-testable in jsdom) ──────────────────
+// AND across groups, OR within a multi-value group.
+function filterCandidates(list, criteria) {
+  return list.filter(c => {
+    const f = c.filterable;
+    const t = c.prescreen_traits || [];
+
+    // Country — OR within group
+    if (criteria.country && criteria.country.length) {
+      if (!criteria.country.includes(f.country)) return false;
+    }
+    // Education level — OR within group
+    if (criteria.education_level && criteria.education_level.length) {
+      if (!criteria.education_level.includes(f.education_level)) return false;
+    }
+    // Skills — OR: candidate has at least one selected skill
+    if (criteria.skills && criteria.skills.length) {
+      if (!criteria.skills.some(s => (f.skills || []).includes(s))) return false;
+    }
+    // English level — "at least X"
+    if (criteria.english_level) {
+      const minOrd  = ENGLISH_ORDER[criteria.english_level] || 0;
+      const candOrd = ENGLISH_ORDER[f.english_level] || 0;
+      if (candOrd < minOrd) return false;
+    }
+    // Employment status — exact
+    if (criteria.employment_status) {
+      if (f.employment_status !== criteria.employment_status) return false;
+    }
+    // Experience range
+    if (criteria.experience_min !== null && criteria.experience_min !== "") {
+      if ((f.experience_years || 0) < Number(criteria.experience_min)) return false;
+    }
+    if (criteria.experience_max !== null && criteria.experience_max !== "") {
+      if ((f.experience_years || 0) > Number(criteria.experience_max)) return false;
+    }
+    // Salary max — only within the same currency as the submitted candidate
+    if (criteria.salary_max !== null && criteria.salary_max !== "" && f.salary_expectation) {
+      if (f.salary_expectation.currency === criteria._salary_currency) {
+        if (f.salary_expectation.amount > Number(criteria.salary_max)) return false;
+      }
+    }
+    // Traits — OR: candidate has at least one selected trait
+    if (criteria.traits && criteria.traits.length) {
+      if (!criteria.traits.some(tr => t.includes(tr))) return false;
+    }
+    return true;
+  });
+}
+
+// ── Recruiter view renderer ────────────────────────────────────────
+function renderRecruiterView(submittedData) {
+  // Expand the card for the two-column layout
+  document.querySelector('.card').classList.add('card-wide');
+
+  // Build submitted candidate row through canonical buildFilterable() so key names
+  // are guaranteed identical to what filterCandidates() accesses.
+  const submittedCandidate = {
+    name: candidateName || "You",
+    filterable: buildFilterable(submittedData),
+    prescreen_traits: submittedData.prescreen_traits || [],
+    _status: submittedData._prescreen_status,
+    _justSubmitted: true,
+  };
+
+  const allCandidates = [submittedCandidate, ...SAMPLE_CANDIDATES];
+
+  // Derive distinct values for checkbox lists from the full dataset
+  const allCountries = [...new Set(allCandidates.map(c => c.filterable.country).filter(Boolean))].sort();
+  const allEducation = [...new Set(allCandidates.map(c => c.filterable.education_level).filter(Boolean))].sort();
+  const allSkillsSet = [...new Set(allCandidates.flatMap(c => c.filterable.skills || []))].sort();
+  const allTraitsSet = [...new Set(allCandidates.flatMap(c => c.prescreen_traits || []))].sort();
+
+  // Status note
+  const isFlagged = submittedData._prescreen_status === "completed_flagged";
+  document.getElementById("recruiter-status-note").innerHTML = isFlagged
+    ? `<i class="fa-solid fa-flag" style="color:var(--tan)"></i> Your submission is <strong>flagged for review</strong> — pinned at top. See the JSON panel below for details.`
+    : `<i class="fa-solid fa-circle-check" style="color:var(--olive)"></i> Your submission is <strong>clear</strong> — pinned at top. This is how recruiters see the candidate pool.`;
+
+  // Mutable filter criteria — reset object mirrors initCriteria shape exactly
+  const initCriteria = () => ({
+    country: [], education_level: [], skills: [], traits: [],
+    english_level: "", employment_status: "",
+    experience_min: "", experience_max: "", salary_max: "",
+    _salary_currency: (submittedData.salary_expectation && submittedData.salary_expectation.currency) || "IDR",
+  });
+  let criteria = initCriteria();
+
+  const EDU_LABELS = { high_school: "High School", diploma: "Diploma", bachelors: "Bachelor's", masters: "Master's", doctorate: "Doctorate", other: "Other" };
+  const ENG_LABELS = { basic: "Basic", conversational: "Conversational", fluent: "Fluent", native: "Native" };
+  const EMP_LABELS = { employed: "Employed", employed_part: "Employed (part)", freelance: "Freelance", fresh_graduate: "Fresh graduate", unemployed: "Unemployed" };
+  const TRAIT_LABELS = { "full-time-available": "Full-time", "available-weekends": "Weekends", "available-public-holidays": "Public holidays", "voice-capable": "Voice capable", "has-competing-processes": "Competing processes", "ic-accepted": "IC accepted", "returning-applicant": "Returning applicant", "shift-regular": "Shift: regular", "shift-morning": "Shift: morning", "shift-afternoon": "Shift: afternoon", "shift-night": "Shift: night" };
+
+  function buildFilterPanel() {
+    const panelEl = document.getElementById("filter-panel-el");
+    const chkList = (vals, filterKey, labelFn) =>
+      vals.length ? `<div class="filter-group">
+        <div class="filter-group-label">${filterKey === "country" ? "Country" : filterKey === "education_level" ? "Education" : filterKey === "skills" ? "Skills (any of)" : "Traits (any of)"}</div>
+        <div class="filter-checkbox-list">${vals.map(v =>
+          `<label class="filter-checkbox-item">
+            <input type="checkbox" data-filter="${filterKey}" value="${v}"${(criteria[filterKey]||[]).includes(v)?' checked':''}>
+            ${labelFn ? labelFn(v) : v}
+          </label>`).join("")}</div>
+      </div>` : "";
+
+    panelEl.innerHTML = `
+      <div class="filter-count" id="filter-count-el"></div>
+      ${chkList(allCountries, "country", null)}
+      ${chkList(allEducation, "education_level", v => EDU_LABELS[v] || v)}
+      ${chkList(allSkillsSet, "skills", v => v.replace(/-/g,' '))}
+      ${chkList(allTraitsSet, "traits", v => TRAIT_LABELS[v] || v)}
+      <div class="filter-group">
+        <div class="filter-group-label">English (at least)</div>
+        <div class="filter-select">
+          <select data-filter-select="english_level">
+            <option value="">Any</option>
+            ${["basic","conversational","fluent","native"].map(v =>
+              `<option value="${v}"${criteria.english_level===v?' selected':''}>${ENG_LABELS[v]}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-group-label">Status</div>
+        <div class="filter-select">
+          <select data-filter-select="employment_status">
+            <option value="">Any</option>
+            ${Object.entries(EMP_LABELS).map(([v,l]) =>
+              `<option value="${v}"${criteria.employment_status===v?' selected':''}>${l}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-group-label">Experience (yrs)</div>
+        <div class="filter-range">
+          <input type="number" min="0" placeholder="Min" data-filter-num="experience_min" value="${criteria.experience_min}">
+          <span style="color:var(--char);font-size:0.8125rem;flex-shrink:0">–</span>
+          <input type="number" min="0" placeholder="Max" data-filter-num="experience_max" value="${criteria.experience_max}">
+        </div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-group-label">Salary max (${criteria._salary_currency})</div>
+        <div class="filter-num"><input type="number" min="0" placeholder="Max amount" data-filter-num="salary_max" value="${criteria.salary_max}"></div>
+        <div style="font-size:0.7rem;color:var(--char);margin-top:3px">Only compared within same currency</div>
+      </div>
+      <button class="clear-filters-btn" id="clear-filters-btn">Clear all filters</button>
+    `;
+
+    // Wire checkbox events
+    panelEl.querySelectorAll('input[data-filter]').forEach(inp => {
+      inp.addEventListener('change', () => {
+        const key = inp.dataset.filter;
+        if (!Array.isArray(criteria[key])) criteria[key] = [];
+        if (inp.checked) { criteria[key].push(inp.value); }
+        else             { criteria[key] = criteria[key].filter(v => v !== inp.value); }
+        applyFilters();
+      });
+    });
+    // Wire select events
+    panelEl.querySelectorAll('select[data-filter-select]').forEach(sel => {
+      sel.addEventListener('change', () => {
+        criteria[sel.dataset.filterSelect] = sel.value;
+        applyFilters();
+      });
+    });
+    // Wire number inputs
+    panelEl.querySelectorAll('input[data-filter-num]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        criteria[inp.dataset.filterNum] = inp.value;
+        applyFilters();
+      });
+    });
+    // Clear button
+    document.getElementById('clear-filters-btn').addEventListener('click', () => {
+      criteria = initCriteria();
+      buildFilterPanel();
+      applyFilters();
+    });
+  }
+
+  function renderCandidates(list) {
+    const listEl = document.getElementById("candidate-list-el");
+    if (!list.length) {
+      listEl.innerHTML = `<div style="text-align:center;color:var(--char);padding:40px 20px;font-size:0.875rem">No candidates match the current filters.</div>`;
+      return;
+    }
+    listEl.innerHTML = list.map(c => {
+      const f  = c.filterable;
+      const isS = c._justSubmitted;
+      const loc = [f.city, f.country].filter(Boolean).join(", ");
+      const salStr = f.salary_expectation
+        ? `${f.salary_expectation.amount.toLocaleString()} ${f.salary_expectation.currency}`
+        : "—";
+      const statusBadge = {
+        completed_clear:   `<span class="badge-clear">Clear</span>`,
+        completed_flagged: `<span class="badge-flagged">Flagged</span>`,
+      }[c._status] || "";
+      return `<div class="candidate-card${isS ? " just-submitted" : ""}">
+        <div class="candidate-card-header">
+          <span class="candidate-name">${c.name}</span>
+          <div class="candidate-badges">${isS ? '<span class="badge-submitted">Just submitted</span>' : ''}${statusBadge}</div>
+        </div>
+        <div class="candidate-meta">
+          ${loc ? `<span><i class="fa-solid fa-location-dot"></i> ${loc}</span>` : ''}
+          ${f.education_level ? `<span><i class="fa-solid fa-graduation-cap"></i> ${EDU_LABELS[f.education_level]||f.education_level}</span>` : ''}
+          ${f.experience_years !== null && f.experience_years !== undefined ? `<span><i class="fa-solid fa-briefcase"></i> ${f.experience_years} yr${f.experience_years !== 1 ? 's' : ''}</span>` : ''}
+          ${f.english_level ? `<span><i class="fa-solid fa-language"></i> ${ENG_LABELS[f.english_level]||f.english_level}</span>` : ''}
+          <span><i class="fa-solid fa-coins"></i> ${salStr}/mo</span>
+        </div>
+        ${(f.skills||[]).length ? `<div class="candidate-chips">${(f.skills||[]).map(s=>`<span class="chip-skill">${s.replace(/-/g,' ')}</span>`).join('')}</div>` : ''}
+        ${(c.prescreen_traits||[]).length ? `<div class="candidate-chips">${(c.prescreen_traits||[]).map(t=>`<span class="chip-bool">${TRAIT_LABELS[t]||t}</span>`).join('')}</div>` : ''}
+      </div>`;
+    }).join("");
+  }
+
+  function applyFilters() {
+    const filtered = filterCandidates(allCandidates, criteria);
+    renderCandidates(filtered);
+    const countEl = document.getElementById("filter-count-el");
+    if (countEl) countEl.textContent = `Showing ${filtered.length} of ${allCandidates.length} candidates`;
+  }
+
+  // Initial render
+  buildFilterPanel();
+  applyFilters();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// COPY JSON
+// ═══════════════════════════════════════════════════════════════════
+function copyJson() {
+  const text = document.getElementById("json-output").textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector(".copy-btn");
+    btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied';
+    setTimeout(() => { btn.innerHTML = '<i class="fa-regular fa-copy"></i> Copy'; }, 2000);
+  });
+}
+
+// Enter key on intro fields → start
+document.getElementById("intro-email").addEventListener("keydown", e => {
+  if (e.key === "Enter") startPrescreen();
+});
+</script>
+</body>
+</html>
