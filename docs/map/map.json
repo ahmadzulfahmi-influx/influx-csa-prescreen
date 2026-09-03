@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "generator": "projmap/0.1.0",
+  "project": {
+    "slug": "work_influx_projects/pre-screening/csa",
+    "name": "csa",
+    "root": "work_influx_projects/pre-screening/csa",
+    "shape": "docs-only",
+    "signals": []
+  },
+  "layers": {
+    "structure": {
+      "language_counts": {},
+      "node_count_total": 0,
+      "node_count_kept": 0,
+      "omitted_nodes": 0,
+      "nodes": [],
+      "edge_count_total": 0,
+      "edge_count_kept": 0,
+      "omitted_edges": 0,
+      "edges": []
+    },
+    "data_model": {
+      "sources": [],
+      "table_count": 0,
+      "tables": [],
+      "enums": []
+    },
+    "routes": {
+      "routes": [],
+      "router": "none",
+      "route_count": 0,
+      "page_count": 0,
+      "api_count": 0,
+      "omitted_routes": 0,
+      "middleware": "",
+      "layouts": []
+    },
+    "process_flow": {
+      "flows": [],
+      "flow_count_total": 0,
+      "flow_count_kept": 0,
+      "omitted_flows": 0
+    },
+    "design": {
+      "tailwind_version": "",
+      "config_file": "",
+      "css_files": [
+        "Candidates _ People_files/active_admin-a737b97ffa4b9d34b743840ad3ce1ed8dff0638c14719351deb2eccb63f9db79.css",
+        "Candidates _ People_files/application-90367c5d8a75e460aaa17411d10ebeac3e4a8da87ebdd47dd4aae890d792251d.css",
+        "Candidates _ People_files/roster-fa010a08ad1819134eaf6c3046df0dcd7adbb30f892e7323b05c4431ce1ba95c.css"
+      ],
+      "tokens": [
+        {
+          "name": "bs-black",
+          "value": "#000"
+        },
+        {
+          "name": "bs-black-rgb",
+          "value": "0, 0, 0"
+        },
+        {
+          "name": "bs-blue",
+          "value": "#0d6efd"
+        },
+        {
+          "name": "bs-body-bg",
+          "value": "#fff"
+        },
+        {
+          "name": "bs-body-bg-rgb",
+          "value": "255, 255, 255"
+        },
+        {
+          "name": "bs-body-color",
+          "value": "#212529"
+        },
+        {
+          "name": "bs-body-color-rgb",
+          "value": "33, 37, 41"
+        },
+        {
+          "name": "bs-body-font-family",
+          "value": "var(--bs-font-sans-serif)"
+        },
+        {
+          "name": "bs-body-font-size",
+          "value": "0.8125rem"
+        },
+        {
+          "name": "bs-body-font-weight",
+          "value": "400"
+        },
+        {
+          "name": "bs-body-line-height",
+          "value": "1.5"
+        },
+        {
+          "name": "bs-border-color",
+          "value": "#dee2e6"
+        },
+        {
+          "name": "bs-border-color-translucent",
+          "value": "rgba(0, 0, 0, 0.175)"
+        },
+        {
+          "name": "bs-border-radius",
+          "value": "0.375rem"
+        },
+        {
+          "name": "bs-border-radius-2xl",
+          "value": "2rem"
+        },
+        {
+          "name": "bs-border-radius-lg",
+          "value": "0.5rem"
+        },
+        {
+          "name": "bs-border-radius-pill",
+          "value": "50rem"
+        },
+        {
+          "name": "bs-border-radius-sm",
+          "value": "0.25rem"
+        },
+        {
+          "name": "bs-border-radius-xl",
+          "value": "1rem"
+        },
+        {
+          "name": "bs-border-style",
+          "value": "solid"
+        },
+        {
+          "name": "bs-border-width",
+          "value": "1px"
+        },
+        {
+          "name": "bs-code-color",
+          "value": "#d63384"
+        },
+        {
+          "name": "bs-cyan",
+          "value": "#0dcaf0"
+        },
+        {
+          "name": "bs-danger",
+          "value": "#dc3545"
+        },
+        {
+          "name": "bs-danger-rgb",
+          "value": "220, 53, 69"
+        },
+        {
+          "name": "bs-dark",
+          "value": "#212529"
+        },
+        {
+          "name": "bs-dark-rgb",
+          "value": "33, 37, 41"
+        },
+        {
+          "name": "bs-font-monospace",
+          "value": "SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace"
+        },
+        {
+          "name": "bs-font-sans-serif",
+          "value": "lato, helvetica neue, Helvetica, sans-serif"
+        },
+        {
+          "name": "bs-gradient",
+          "value": "linear-gradient(180deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0))"
+        },
+        {
+          "name": "bs-gray",
+          "value": "#6c757d"
+        },
+        {
+          "name": "bs-gray-100",
+          "value": "#f8f9fa"
+        },
+        {
+          "name": "bs-gray-200",
+          "value": "#e9ecef"
+        },
+        {
+          "name": "bs-gray-300",
+          "value": "#dee2e6"
+        },
+        {
+          "name": "bs-gray-400",
+          "value": "#ced4da"
+        },
+        {
+          "name": "bs-gray-500",
+          "value": "#adb5bd"
+        },
+        {
+          "name": "bs-gray-600",
+          "value": "#6c757d"
+        },
+        {
+          "name": "bs-gray-700",
+          "value": "#495057"
+        },
+        {
+          "name": "bs-gray-800",
+          "value": "#343a40"
+        },
+        {
+          "name": "bs-gray-900",
+          "value": "#212529"
+        }
+      ],
+      "token_count_total": 65,
+      "omitted_tokens": 25,
+      "fonts": [
+        "Font Awesome 6 Brands",
+        "Font Awesome 6 Free",
+        "bootstrap-icons"
+      ],
+      "components": [],
+      "component_count_total": 0,
+      "omitted_components": 0
+    },
+    "services": {
+      "env_vars": [],
+      "env_var_count_total": 0,
+      "omitted_env_vars": 0,
+      "detected": []
+    },
+    "build_state": {
+      "claude_md": "CLAUDE.md",
+      "phases": [],
+      "checkbox_total": 0,
+      "checkbox_done": 0,
+      "checklists": [],
+      "decisions": [
+        "context/decisions/2026-06-11-csa-prescreen-recruiter-filter-view.md"
+      ],
+      "decision_count_total": 1,
+      "omitted_decisions": 0,
+      "todo_count": 0
+    },
+    "cross_project": {
+      "status": "pending",
+      "note": "computed at the portfolio root; see Phase 5"
+    }
+  },
+  "truncated": {
+    "design_tokens": 25
+  },
+  "warnings": []
+}
