@@ -6,7 +6,7 @@ asked candidates logistics and eligibility questions before the behavioral inter
 
 ## Why they're here
 
-Feedback analysis (`AI-assessment-demo/planning_docs/feedbacks/markdown/`) showed that
+Feedback analysis (`ai-assessment/planning_docs/feedbacks/markdown/`) showed that
 the chat-based pre-screen had a critical blind spot: **operational-fit disqualifiers
 (availability, salary expectation above range, English bar) were invisible to behavioral
 chat**. The clearest examples:
@@ -42,6 +42,6 @@ Prompt P (chat interviewer) → transcript → Prompt PE (extractor) → Prescre
 ```
 
 Architecture docs:
-- `AI-assessment-demo/context/architecture/AI-assessment-demo - Pre-Screen Pipeline.md`
-- `AI-assessment-demo/context/decisions/2026-05-26 - AI-assessment-demo pre-screen phase approach.md`
-- `AI-assessment-demo/planning_docs/AI_Assessment_Engineering_Spec_v1.1.md §12.8`
+- `ai-assessment/context/architecture/ai-assessment - Pre-Screen Pipeline.md`
+- `ai-assessment/context/decisions/2026-05-26 - ai-assessment pre-screen phase approach.md`
+- `ai-assessment/planning_docs/AI_Assessment_Engineering_Spec_v1.1.md §12.8`

@@ -2,7 +2,7 @@
 
 **Shape:** docs-only &middot; **Signals:** -
 
-**Status:** CLAUDE.md found, no phase/step markers in it
+**Status:** CLAUDE.md found, not phase-structured - carries 1 decision on file
 
 **Routes:** 0 (0 pages, 0 api)
 **Tables:** 0
@@ -34,7 +34,7 @@ _no HTTP router - this project has no web/API routes (shape: docs-only)_
 <details>
 <summary>Process flow</summary>
 
-_no key routes found (a route must reference a table by name, e.g. `.from('table')`, to appear here)_
+_no key routes found - a route appears here only if its handler (or something it imports) names a known table, either as a string literal or in a SQL `FROM`/`JOIN`/`INTO`/`UPDATE` position_
 
 </details>
 
@@ -120,6 +120,6 @@ _25 more tokens omitted - see `map.json`._
 <details>
 <summary>Cross-project</summary>
 
-_status: pending - computed at the portfolio root; see Phase 5_
+_cross-project aggregation lives in the portfolio map: `docs/map/PORTFOLIO.md` at the monorepo root_
 
 </details>

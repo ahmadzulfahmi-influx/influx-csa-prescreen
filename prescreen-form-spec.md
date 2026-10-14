@@ -1,7 +1,9 @@
 # Pre-Screen Form Spec — Customer Support Agent (CSA)
 
-**Version:** 2.1
-**Date:** 2026-06-11
+**Version:** 2.2 (revised 2026-08-03 — availability changed from a hard gate to a flag; a candidate under
+44 hrs/week now proceeds to the AI chat like anyone else, carrying a visible flag with their stated hours,
+instead of being knocked out before reaching the assessment)
+**Date:** 2026-08-03
 **Status:** Draft for engineering review
 **Replaces:** AI chat pre-screen via Prompt P / Prompt PE (see `legacy/`)
 
@@ -197,9 +199,16 @@ Order in `ranking[]` = order the candidate selected them (first selected = most 
 
 ### Hard Gates (do NOT proceed to AI chat)
 
+**Availability is no longer a hard gate as of this revision.** Below-44-hours candidates are never blocked
+from the assessment — they proceed like any other applicant, carrying a flag the recruiter can see. The
+only reason to still capture their stated hours at this stage is so the flag exists before the candidate
+reaches the intake-routing fast-track check, which is where availability actually affects anything (it
+withholds the fast-track invitation only — see `INTAKE_ROUTING_SPEC.md`'s eligibility gates, inlined
+rationale: no field in this pipeline should ever silently drop a candidate on availability alone, only
+route them to the slower, normal path).
+
 | Gate key | Condition | `prescreen_flagged_reasons` entry |
 |---|---|---|
-| `availability_not_full_time` | `availability.full_time == false` | `"availability_not_full_time"` |
 | `salary_expectation_above_range` | `salary_expectation.amount > CONFIG.salary_ceiling[currency]` | `"salary_expectation_above_range"` |
 | `english_below_bar` | `english_self_rating.level` index < `CONFIG.english_minimum` index in `[basic, conversational, fluent, native]` | `"english_below_bar"` |
 
@@ -218,6 +227,7 @@ config requires "Fluent". See `CONFIG.english_minimum` below.
 
 | Flag key | Condition |
 |---|---|
+| `availability_below_44hrs` | `availability.full_time == false` — candidate proceeds to the AI chat exactly as any other applicant; the flag exists so a recruiter reviewing the candidate later sees the stated hours. The role's definition of full-time is 44 hrs/week, 8 hrs/day. |
 | `voice_support_declined` | `voice_support.comfortable == false` AND `CONFIG.voice_required == true` |
 | `ic_status_declined` | `ic_status.accepts == false` AND `CONFIG.ic_is_knockout == true` |
 | `has_competing_processes` | `competing_processes.value == "yes"` |
@@ -361,7 +371,7 @@ Reuses the existing `chat_assessment_template` config keys plus new additions:
 | `salary.is_knockout` | boolean | Flag if not acknowledged |
 | `salary_range` | string | Injected into `{{salary_range}}` display |
 | *(new)* `availability.enabled` | boolean | Show full-time availability question |
-| *(new)* `availability.is_hard_gate` | boolean | Default: true |
+| *(new)* `availability.is_hard_gate` | boolean | Default: **false**. Availability never knocks a candidate out — see Gate Rules above. |
 | *(new)* `salary_expectation.enabled` | boolean | Show salary expectation input |
 | *(new)* `salary_expectation.ceiling_usd` | number | Hard gate ceiling in USD equivalent |
 | *(new)* `salary_expectation.ceiling_idr` | number | Hard gate ceiling in IDR |
@@ -380,7 +390,7 @@ Reuses the existing `chat_assessment_template` config keys plus new additions:
 
 | # | Label | Control | Key | Required | Gate / Flag |
 |---|---|---|---|---|---|
-| 1 | Can you commit to full-time work? | Radio: Yes / No | `availability.full_time` | ✓ | **HARD GATE** if No |
+| 1 | Can you commit to full-time work? (44 hrs/wk, 8 hrs/day) | Radio: Yes / No | `availability.full_time` | ✓ | Flag if No — never a gate |
 | 2 | Which days do you prefer working? | Checkboxes: Weekdays, Weekends, Public holidays | `form_meta.working_days` | — | — |
 | 3 | Which times do you prefer working? | Checkboxes: Regular / Morning / Afternoon / Night | `form_meta.working_times` → `shift_preference.ranking` | — | Flag on mismatch |
 | 4 | What is the earliest date you can start? | Date picker | `availability.start_date` | ✓ | — |

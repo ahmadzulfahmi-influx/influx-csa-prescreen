@@ -1,12 +1,12 @@
 # CLAUDE.md — pre-screening/csa
 
-_Last updated: 2026-06-11 (v2.1 — reclassify categorical fields to filterable; recruiter filter view)_
+_Last updated: 2026-08-03 (v2.2 — availability moved from hard gate to flag-and-continue)_
 
 ## What this is
 
 Standalone static pre-screen form for the Customer Support Agent (CSA) role at Influx.
 Replaces the AI chat-based pre-screen (Prompt P / Prompt PE) that was part of the
-`AI-assessment-demo` project. Decision rationale: feedback analysis showed the AI chat
+`ai-assessment` project. Decision rationale: feedback analysis showed the AI chat
 was blind to operational-fit disqualifiers — see `legacy/README.md` for context.
 
 ## Architecture
@@ -26,7 +26,7 @@ just-submitted candidate pinned at the top. This demonstrates how `filterable{}`
 
 ## Design System
 
-Influx tokens (matching `AI-assessment-demo/index.html`):
+Influx tokens (matching `ai-assessment/index.html`):
 
 | Token | Value | Use |
 |---|---|---|
@@ -42,10 +42,14 @@ Font: Inter (Google Fonts). Icons: FontAwesome Duotone kit (same as demo).
 
 ## Gate Rules
 
-Three **hard gates** (block progression):
-1. `availability_not_full_time` — candidate can't work full-time (44 hrs/wk)
-2. `english_below_bar` — self-rates English below `CONFIG.english_minimum`
-3. `salary_expectation_above_range` — ask exceeds `CONFIG.salary_ceiling[currency]`
+Two **hard gates** (block progression):
+1. `english_below_bar` — self-rates English below `CONFIG.english_minimum`
+2. `salary_expectation_above_range` — ask exceeds `CONFIG.salary_ceiling[currency]`
+
+Availability is **flag-and-continue**, not a gate (as of 2026-08-03): a candidate under 44 hrs/wk
+proceeds to the AI chat like anyone else, carrying `availability_below_44hrs` for the recruiter to see.
+It never knocks a candidate out here — the only place availability affects anything downstream is the
+separate intake-routing fast-track check, where it withholds the fast-track invitation only.
 
 Everything else is **flag-and-continue** (`prescreen_status = "completed_flagged"`).
 
@@ -74,7 +78,7 @@ sections for the full tables and filter semantics.
 
 Top of `prescreen-form.html` — `const CONFIG = { ... }`. HR replaces:
 - `salary_range_display`: shown in the IC acknowledgment text (keep `{{salary_range}}`
-  as placeholder in git — OD-5 from AI-assessment-demo applies here too)
+  as placeholder in git — OD-5 from ai-assessment applies here too)
 - `salary_ceiling`: per-currency hard gate thresholds
 - `english_minimum`: minimum accepted English level (`"basic"` = only gate Basic, most permissive)
 - `required_shifts`: shift codes for flag check (e.g. `["regular","morning"]`)
@@ -125,5 +129,5 @@ See `prescreen-form-spec.md` for the full field contract. The engineering team a
 ## Reference
 
 - `legacy/README.md` — why the AI pre-screen was replaced
-- `AI-assessment-demo/context/architecture/AI-assessment-demo - Pre-Screen Pipeline.md`
-- `AI-assessment-demo/planning_docs/AI_Assessment_Engineering_Spec_v1.1.md §12.8`
+- `ai-assessment/context/architecture/ai-assessment - Pre-Screen Pipeline.md`
+- `ai-assessment/planning_docs/AI_Assessment_Engineering_Spec_v1.1.md §12.8`
